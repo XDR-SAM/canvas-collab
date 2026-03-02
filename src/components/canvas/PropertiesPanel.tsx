@@ -4,7 +4,8 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Copy, ArrowUpToLine, ArrowDownToLine } from "lucide-react";
+import { Trash2, Copy, ArrowUpToLine, ArrowDownToLine, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const PropertiesPanel = () => {
   const {
@@ -21,13 +22,37 @@ const PropertiesPanel = () => {
     updateElement,
   } = useCanvasStore();
 
+  const [collapsed, setCollapsed] = useState(true);
   const selectedArr = Array.from(selectedIds);
   const hasSelection = selectedArr.length > 0;
   const selectedElement = hasSelection ? elements.find((e) => e.id === selectedArr[0]) : null;
 
+  // Auto-open when selecting, auto-close when deselecting
+  useEffect(() => {
+    if (hasSelection) setCollapsed(false);
+  }, [hasSelection]);
+
+  if (collapsed) {
+    return (
+      <Button
+        variant="outline"
+        size="icon"
+        className="absolute right-3 top-14 z-20 h-8 w-8 bg-background/90 backdrop-blur-sm"
+        onClick={() => setCollapsed(false)}
+      >
+        <PanelRightOpen className="h-4 w-4" />
+      </Button>
+    );
+  }
+
   return (
     <div className="absolute right-3 top-14 z-20 w-56 rounded-xl border bg-background/95 backdrop-blur-sm p-4 shadow-lg space-y-4 max-h-[calc(100vh-5rem)] overflow-y-auto">
-      <h3 className="text-sm font-semibold">Properties</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Properties</h3>
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCollapsed(true)}>
+          <PanelRightClose className="h-3.5 w-3.5" />
+        </Button>
+      </div>
 
       <div className="space-y-3">
         <div className="space-y-1">

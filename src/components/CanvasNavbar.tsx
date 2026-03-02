@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ThemeToggle from "@/components/ThemeToggle";
 import ExportImportButtons from "@/components/canvas/ExportImport";
-import { Pencil, LogOut, Settings, Shield, LayoutDashboard, Save, CloudUpload } from "lucide-react";
+import { Pencil, LogOut, Settings, Shield, LayoutDashboard, Save, CloudUpload, Share2 } from "lucide-react";
 
 interface Props {
   onSaveToCloud?: () => void;
@@ -14,9 +14,10 @@ interface Props {
   onBack?: () => void;
   savePending?: boolean;
   onSave?: () => void;
+  onShare?: () => void;
 }
 
-const CanvasNavbar = ({ onSaveToCloud, boardName = "Scratch Pad", showBack, onBack, savePending, onSave }: Props) => {
+const CanvasNavbar = ({ onSaveToCloud, boardName = "Scratch Pad", showBack, onBack, savePending, onSave, onShare }: Props) => {
   const { user, profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -47,6 +48,12 @@ const CanvasNavbar = ({ onSaveToCloud, boardName = "Scratch Pad", showBack, onBa
       {/* Right cluster */}
       <div className="flex items-center gap-1.5 pointer-events-auto">
         <ExportImportButtons boardName={boardName} />
+
+        {onShare && (
+          <Button variant="outline" size="sm" className="h-8 bg-background/90 backdrop-blur-sm" onClick={onShare}>
+            <Share2 className="mr-1 h-3.5 w-3.5" /> Share
+          </Button>
+        )}
 
         {onSave && (
           <Button variant="outline" size="sm" className="h-8 bg-background/90 backdrop-blur-sm" onClick={onSave} disabled={savePending}>
