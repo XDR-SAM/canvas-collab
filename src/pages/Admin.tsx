@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
+import AnalyticsCharts from "@/components/admin/AnalyticsCharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,8 +27,7 @@ const Admin = () => {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [selectedRole, setSelectedRole] = useState<Enums<"app_role">>("free_user");
 
-  // Fetch all profiles (admin RLS policy allows this)
-  const { data: profiles, isLoading: loadingProfiles } = useQuery({
+  const { data: profiles } = useQuery({
     queryKey: ["admin-profiles"],
     queryFn: async () => {
       const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
@@ -36,7 +36,6 @@ const Admin = () => {
     },
   });
 
-  // Fetch all roles
   const { data: allRoles } = useQuery({
     queryKey: ["admin-roles"],
     queryFn: async () => {
@@ -46,8 +45,7 @@ const Admin = () => {
     },
   });
 
-  // Fetch all boards
-  const { data: boards, isLoading: loadingBoards } = useQuery({
+  const { data: boards } = useQuery({
     queryKey: ["admin-boards"],
     queryFn: async () => {
       const { data, error } = await supabase.from("boards").select("*").order("updated_at", { ascending: false });
@@ -56,7 +54,6 @@ const Admin = () => {
     },
   });
 
-  // Fetch app settings
   const { data: settings } = useQuery({
     queryKey: ["admin-settings"],
     queryFn: async () => {
@@ -73,10 +70,7 @@ const Admin = () => {
       const { error } = await supabase.from("profiles").update({ is_banned: banned }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
-      toast.success("User updated!");
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-profiles"] }); toast.success("User updated!"); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -85,10 +79,7 @@ const Admin = () => {
       const { error } = await supabase.from("boards").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-boards"] });
-      toast.success("Board deleted!");
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-boards"] }); toast.success("Board deleted!"); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -107,16 +98,11 @@ const Admin = () => {
 
   const changeRole = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: Enums<"app_role"> }) => {
-      // Delete existing roles and insert new one
       await supabase.from("user_roles").delete().eq("user_id", userId);
       const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-roles"] });
-      toast.success("Role updated!");
-      setRoleDialogOpen(false);
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-roles"] }); toast.success("Role updated!"); setRoleDialogOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -149,17 +135,16 @@ const Admin = () => {
             <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" />Settings</TabsTrigger>
           </TabsList>
 
-          {/* Overview */}
-          <TabsContent value="overview">
+          <TabsContent value="overview" className="space-y-6">
             <div className="grid gap-4 md:grid-cols-4">
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle></CardHeader><CardContent><p className="text-3xl font-bold">{totalUsers}</p></CardContent></Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Boards</CardTitle></CardHeader><CardContent><p className="text-3xl font-bold">{totalBoards}</p></CardContent></Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Pro Users</CardTitle></CardHeader><CardContent><p className="text-3xl font-bold">{proUsers}</p></CardContent></Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Banned Users</CardTitle></CardHeader><CardContent><p className="text-3xl font-bold text-destructive">{bannedUsers}</p></CardContent></Card>
             </div>
+            <AnalyticsCharts profiles={profiles} boards={boards} roles={allRoles} />
           </TabsContent>
 
-          {/* Users */}
           <TabsContent value="users">
             <div className="mb-4 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -200,7 +185,6 @@ const Admin = () => {
             </Card>
           </TabsContent>
 
-          {/* Boards */}
           <TabsContent value="boards">
             <div className="mb-4 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -236,7 +220,6 @@ const Admin = () => {
             </Card>
           </TabsContent>
 
-          {/* Settings */}
           <TabsContent value="settings" className="space-y-6">
             <Card>
               <CardHeader><CardTitle>App Settings</CardTitle></CardHeader>
@@ -268,7 +251,6 @@ const Admin = () => {
         </Tabs>
       </div>
 
-      {/* Change Role Dialog */}
       <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Change Role for {selectedUser?.full_name || "User"}</DialogTitle></DialogHeader>

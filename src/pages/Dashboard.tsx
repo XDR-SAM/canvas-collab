@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
+import AnnouncementBanner from "@/components/AnnouncementBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,8 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Search, Star, MoreVertical, Pencil, Trash2, Copy, SortAsc, Layout } from "lucide-react";
+import { Plus, Search, Star, MoreVertical, Pencil, Trash2, Copy, SortAsc, Layout, Users } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type SortOption = "updated_at" | "created_at" | "name";
@@ -41,6 +44,31 @@ const Dashboard = () => {
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return data;
+    },
+    enabled: !!user,
+  });
+
+  // Fetch shared boards (boards where user is a collaborator)
+  const { data: sharedBoards } = useQuery({
+    queryKey: ["shared-boards", user?.id],
+    queryFn: async () => {
+      const { data: collabs, error } = await supabase
+        .from("board_collaborators")
+        .select("board_id, role")
+        .eq("user_id", user!.id);
+      if (error) throw error;
+      if (!collabs || collabs.length === 0) return [];
+
+      const boardIds = collabs.map((c) => c.board_id);
+      const { data: sharedData, error: boardErr } = await supabase
+        .from("boards")
+        .select("*")
+        .in("id", boardIds);
+      if (boardErr) throw boardErr;
+      return (sharedData || []).map((b) => ({
+        ...b,
+        collabRole: collabs.find((c) => c.board_id === b.id)?.role || "viewer",
+      }));
     },
     enabled: !!user,
   });
@@ -115,15 +143,84 @@ const Dashboard = () => {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = boards
-    ?.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === "name") return a.name.localeCompare(b.name);
-      return new Date(b[sortBy]).getTime() - new Date(a[sortBy]).getTime();
-    });
+  const filterAndSort = (list: any[] | undefined) =>
+    list
+      ?.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()))
+      .sort((a, b) => {
+        if (sortBy === "name") return a.name.localeCompare(b.name);
+        return new Date(b[sortBy]).getTime() - new Date(a[sortBy]).getTime();
+      });
+
+  const filtered = filterAndSort(boards);
+  const filteredShared = filterAndSort(sharedBoards);
+
+  const BoardCard = ({ board, isShared = false }: { board: any; isShared?: boolean }) => (
+    <Card
+      className="group cursor-pointer transition-shadow hover:shadow-lg"
+      onClick={() => navigate(`/board/${board.id}`)}
+    >
+      <div className="aspect-video bg-muted/30 border-b flex items-center justify-center relative">
+        <Layout className="h-8 w-8 text-muted-foreground/40" />
+        {isShared && (
+          <Badge variant="secondary" className="absolute top-2 left-2 text-[10px]">
+            <Users className="mr-1 h-3 w-3" /> {board.collabRole}
+          </Badge>
+        )}
+      </div>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between">
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate font-medium">{board.name}</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              {new Date(board.updated_at).toLocaleDateString()}
+            </p>
+          </div>
+          {!isShared && (
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => toggleStar.mutate({ id: board.id, starred: !board.is_starred })}
+              >
+                <Star className={`h-4 w-4 ${board.is_starred ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`} />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => { setRenameBoardId(board.id); setRenameBoardName(board.name); setRenameOpen(true); }}>
+                    <Pencil className="mr-2 h-4 w-4" /> Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => duplicateBoard.mutate(board)}>
+                    <Copy className="mr-2 h-4 w-4" /> Duplicate
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive" onClick={() => { setDeleteBoardId(board.id); setDeleteOpen(true); }}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const EmptyState = ({ title, desc }: { title: string; desc: string }) => (
+    <div className="mt-16 text-center">
+      <Layout className="mx-auto h-16 w-16 text-muted-foreground/30" />
+      <h3 className="mt-4 text-lg font-semibold">{title}</h3>
+      <p className="mt-2 text-muted-foreground">{desc}</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background">
+      <AnnouncementBanner />
       <Navbar />
       <div className="mx-auto max-w-7xl px-4 py-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -151,74 +248,43 @@ const Dashboard = () => {
           </Select>
         </div>
 
-        {isLoading ? (
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-48 rounded-lg" />
-            ))}
-          </div>
-        ) : filtered && filtered.length > 0 ? (
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.map((board) => (
-              <Card
-                key={board.id}
-                className="group cursor-pointer transition-shadow hover:shadow-lg"
-                onClick={() => navigate(`/board/${board.id}`)}
-              >
-                <div className="aspect-video bg-muted/30 border-b flex items-center justify-center">
-                  <Layout className="h-8 w-8 text-muted-foreground/40" />
-                </div>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate font-medium">{board.name}</h3>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {new Date(board.updated_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => toggleStar.mutate({ id: board.id, starred: !board.is_starred })}
-                      >
-                        <Star className={`h-4 w-4 ${board.is_starred ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`} />
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setRenameBoardId(board.id); setRenameBoardName(board.name); setRenameOpen(true); }}>
-                            <Pencil className="mr-2 h-4 w-4" /> Rename
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => duplicateBoard.mutate(board)}>
-                            <Copy className="mr-2 h-4 w-4" /> Duplicate
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive" onClick={() => { setDeleteBoardId(board.id); setDeleteOpen(true); }}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-16 text-center">
-            <Layout className="mx-auto h-16 w-16 text-muted-foreground/30" />
-            <h3 className="mt-4 text-lg font-semibold">No boards yet</h3>
-            <p className="mt-2 text-muted-foreground">Create your first whiteboard to get started.</p>
-            <Button className="mt-6" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" /> Create Board
-            </Button>
-          </div>
-        )}
+        <Tabs defaultValue="my-boards" className="mt-6">
+          <TabsList>
+            <TabsTrigger value="my-boards">My Boards</TabsTrigger>
+            <TabsTrigger value="shared">
+              Shared with me
+              {filteredShared && filteredShared.length > 0 && (
+                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">{filteredShared.length}</Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="my-boards">
+            {isLoading ? (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="h-48 rounded-lg" />
+                ))}
+              </div>
+            ) : filtered && filtered.length > 0 ? (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {filtered.map((board) => <BoardCard key={board.id} board={board} />)}
+              </div>
+            ) : (
+              <EmptyState title="No boards yet" desc="Create your first whiteboard to get started." />
+            )}
+          </TabsContent>
+
+          <TabsContent value="shared">
+            {filteredShared && filteredShared.length > 0 ? (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {filteredShared.map((board) => <BoardCard key={board.id} board={board} isShared />)}
+              </div>
+            ) : (
+              <EmptyState title="No shared boards" desc="Boards shared with you will appear here." />
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Create Dialog */}

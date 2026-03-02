@@ -1,5 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAppSettings } from "@/hooks/use-app-settings";
+import MaintenancePage from "@/components/MaintenancePage";
 import type { Enums } from "@/integrations/supabase/types";
 
 interface Props {
@@ -8,7 +10,8 @@ interface Props {
 }
 
 const ProtectedRoute = ({ children, requiredRole }: Props) => {
-  const { session, loading, hasRole, profile } = useAuth();
+  const { session, loading, hasRole, profile, isAdmin } = useAuth();
+  const { maintenanceMode } = useAppSettings();
 
   if (loading) {
     return (
@@ -26,6 +29,11 @@ const ProtectedRoute = ({ children, requiredRole }: Props) => {
         <p className="text-destructive text-lg font-semibold">Your account has been suspended.</p>
       </div>
     );
+  }
+
+  // Maintenance mode blocks non-admins
+  if (maintenanceMode && !isAdmin) {
+    return <MaintenancePage />;
   }
 
   if (requiredRole && !hasRole(requiredRole)) {

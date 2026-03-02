@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -6,14 +6,17 @@ import { supabase } from "@/integrations/supabase/client";
 import CanvasRenderer from "@/components/canvas/CanvasRenderer";
 import Toolbar from "@/components/canvas/Toolbar";
 import PropertiesPanel from "@/components/canvas/PropertiesPanel";
-import ExportImportButtons from "@/components/canvas/ExportImport";
 import CanvasNavbar from "@/components/CanvasNavbar";
+import AnnouncementBanner from "@/components/AnnouncementBanner";
+import KeyboardShortcutsModal from "@/components/KeyboardShortcutsModal";
 import { toast } from "sonner";
+import { useEffect } from "react";
 
 const Index = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { elements } = useCanvasStore();
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const handleSaveToCloud = async () => {
     if (!user) {
@@ -25,7 +28,6 @@ const Index = () => {
       });
       return;
     }
-    // Create a new board and save current canvas
     const { data, error } = await supabase
       .from("boards")
       .insert({ name: "Untitled Board", owner_id: user.id, canvas_data: elements as any })
@@ -39,12 +41,25 @@ const Index = () => {
     navigate(`/board/${data.id}`);
   };
 
+  // ? key for shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
+        setShortcutsOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   return (
     <div className="relative h-screen w-screen bg-background overflow-hidden">
+      <AnnouncementBanner />
       <CanvasNavbar onSaveToCloud={handleSaveToCloud} boardName="Scratch Pad" />
       <Toolbar />
       <PropertiesPanel />
       <CanvasRenderer />
+      <KeyboardShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 };
