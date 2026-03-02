@@ -1,46 +1,49 @@
 
 
-## Phase 1: Foundation — Auth, Landing Page & Dashboard
+## Remaining Features Plan
 
-### 1. Database Schema & Security
-- Set up tables: `profiles`, `boards`, `board_collaborators`, `board_sessions`, `app_settings`, and `user_roles` (for secure role management)
-- Use `app_role` enum (`admin`, `pro_user`, `free_user`) stored in a separate `user_roles` table
-- RLS policies on all tables with a `has_role()` security definer function
-- Trigger to auto-create profile on signup
-- Plan stored on `profiles` table (`free`/`pro`), role in `user_roles`
+After reviewing the full codebase, Phases 1-3 are implemented. Here is what is still missing or incomplete:
 
-### 2. Authentication System
-- Email/password signup & login pages at `/login` and `/signup`
-- Google OAuth integration
-- Email verification & password reset flow (with `/reset-password` page)
-- Auth context with session management
-- Protected route wrapper checking auth + role
-- Role-based route guard for `/admin/*`
+### 1. Board Sharing UI
+The `board_collaborators` table exists but there is no UI. Will add:
+- Share dialog on Board page to invite users by email (lookup profiles, insert collaborator)
+- Collaborator role selector (viewer/editor)
+- Show shared boards on Dashboard alongside owned boards
+- Active collaborator avatars on the board navbar
 
-### 3. Landing Page (`/`)
-- Hero section with headline, CTA "Start Drawing Free", animated mockup
-- Features section (6 cards with icons)
-- How it works (3-step flow)
-- Pricing section (Free vs Pro cards)
-- Testimonials section (3 cards)
-- Footer with links
-- Dark/light mode toggle
+### 2. Admin Analytics Charts
+The Overview tab has stat cards but no charts. Will add:
+- User signups over time (line chart, Recharts)
+- Boards created over time (bar chart)
+- Role distribution (pie chart)
+- Uses data already available from profiles/boards `created_at` fields
 
-### 4. User Dashboard (`/dashboard`)
-- Board cards grid showing all user boards
-- Create new board (name input dialog)
-- Rename, duplicate, delete boards
-- Star/favorite toggle
-- Search by name, sort by last modified/created/name
-- Board thumbnail previews (placeholder initially)
-- Empty state with CTA
-- Loading skeletons
+### 3. Maintenance Mode & Announcement Banner
+Settings exist in `app_settings` but are not enforced in the app:
+- ProtectedRoute checks `maintenance_mode` and blocks non-admins with a maintenance page
+- Announcement banner component rendered at top of canvas/dashboard when `announcement_banner` is set
+- Both use the existing `use-app-settings` hook
 
-### 5. App Shell & Navigation
-- Top navbar with logo, nav links, user avatar dropdown
-- Dark/light mode toggle (persisted in localStorage)
-- Toast notifications (Sonner) for all actions
-- Responsive layout
+### 4. Collapsible Properties Panel
+Properties panel always shows, eating drawing space. Will:
+- Add a toggle button to show/hide the panel
+- Default to collapsed, open on element selection
+- Remember preference
 
-This phase gives you a fully functional authenticated app with user management and board CRUD. The next phases will add the canvas editor, real-time collaboration, export features, and admin panel.
+### 5. Settings Page Enhancements
+Current settings page is minimal. Will add:
+- Avatar upload using a Supabase storage bucket
+- Account deletion option
+- Theme preference persistence
+
+### 6. Polish & Missing Bits
+- Keyboard shortcut help modal (? key)
+- Board thumbnail generation on save (canvas snapshot to storage)
+- Empty state improvements on dashboard
+
+### Technical Notes
+- Recharts is already installed
+- Storage bucket needed for avatars and thumbnails (migration required)
+- `use-app-settings` hook already fetches settings; maintenance/banner logic wraps existing components
+- Board sharing requires a profile lookup query for inviting by email
 
