@@ -7,6 +7,8 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import CanvasRenderer from "@/components/canvas/CanvasRenderer";
 import Toolbar from "@/components/canvas/Toolbar";
 import PropertiesPanel from "@/components/canvas/PropertiesPanel";
+import ExportImportButtons from "@/components/canvas/ExportImport";
+import LiveCursors from "@/components/canvas/LiveCursors";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -97,11 +99,13 @@ const Board = () => {
           <Save className="mr-1 h-3.5 w-3.5" />
           {saveMutation.isPending ? "Saving..." : "Save"}
         </Button>
+        <ExportImportButtons boardName={board?.name || "board"} />
       </div>
 
       <Toolbar />
       <PropertiesPanel />
       <CanvasRenderer />
+      <LiveCursors boardId={id!} panOffset={useCanvasStore.getState().panOffset} zoom={useCanvasStore.getState().zoom} />
     </div>
   );
 };
