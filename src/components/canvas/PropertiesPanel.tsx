@@ -26,7 +26,7 @@ const PropertiesPanel = () => {
   const selectedElement = hasSelection ? elements.find((e) => e.id === selectedArr[0]) : null;
 
   return (
-    <div className="absolute right-3 top-16 z-20 w-56 rounded-xl border bg-background/95 backdrop-blur-sm p-4 shadow-lg space-y-4 max-h-[calc(100vh-6rem)] overflow-y-auto">
+    <div className="absolute right-3 top-14 z-20 w-56 rounded-xl border bg-background/95 backdrop-blur-sm p-4 shadow-lg space-y-4 max-h-[calc(100vh-5rem)] overflow-y-auto">
       <h3 className="text-sm font-semibold">Properties</h3>
 
       <div className="space-y-3">

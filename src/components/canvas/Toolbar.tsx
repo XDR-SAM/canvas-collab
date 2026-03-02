@@ -24,7 +24,7 @@ const Toolbar = () => {
   const { tool, setTool, undo, redo, showGrid, setShowGrid, snapToGrid, setSnapToGrid, zoom, setZoom, historyIndex, history } = useCanvasStore();
 
   return (
-    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-xl border bg-background/95 backdrop-blur-sm p-1.5 shadow-lg">
+    <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-xl border bg-background/95 backdrop-blur-sm p-1.5 shadow-lg">
       {tools.map((t) => (
         <Tooltip key={t.tool}>
           <TooltipTrigger asChild>

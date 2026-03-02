@@ -5,12 +5,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Pencil, LogOut, Settings, Shield, LayoutDashboard } from "lucide-react";
-import { useAppSettings } from "@/hooks/use-app-settings";
 
 const Navbar = () => {
   const { user, profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
-  const { appName } = useAppSettings();
 
   const handleSignOut = async () => {
     await signOut();
@@ -23,12 +21,12 @@ const Navbar = () => {
 
   return (
     <nav className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-        <Link to={user ? "/dashboard" : "/"} className="flex items-center gap-2 font-bold text-xl">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Pencil className="h-4 w-4 text-primary-foreground" />
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
+        <Link to="/" className="flex items-center gap-2 font-bold text-lg">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+            <Pencil className="h-3.5 w-3.5 text-primary-foreground" />
           </div>
-          <span className="text-foreground">{appName}</span>
+          <span className="text-foreground">DrawBoard</span>
         </Link>
 
         <div className="flex items-center gap-2">
@@ -36,10 +34,10 @@ const Navbar = () => {
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                  <Avatar className="h-9 w-9">
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Avatar className="h-8 w-8">
                     <AvatarImage src={profile?.avatar_url || undefined} />
-                    <AvatarFallback className="bg-primary text-primary-foreground text-sm">{initials}</AvatarFallback>
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs">{initials}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
@@ -50,7 +48,7 @@ const Navbar = () => {
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate("/dashboard")}>
-                  <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
+                  <LayoutDashboard className="mr-2 h-4 w-4" /> My Boards
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/settings")}>
                   <Settings className="mr-2 h-4 w-4" /> Settings
@@ -68,8 +66,8 @@ const Navbar = () => {
             </DropdownMenu>
           ) : (
             <div className="flex items-center gap-2">
-              <Button variant="ghost" asChild><Link to="/login">Sign In</Link></Button>
-              <Button asChild><Link to="/signup">Get Started</Link></Button>
+              <Button variant="ghost" size="sm" asChild><Link to="/login">Sign In</Link></Button>
+              <Button size="sm" asChild><Link to="/signup">Sign Up</Link></Button>
             </div>
           )}
         </div>

@@ -7,10 +7,8 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import CanvasRenderer from "@/components/canvas/CanvasRenderer";
 import Toolbar from "@/components/canvas/Toolbar";
 import PropertiesPanel from "@/components/canvas/PropertiesPanel";
-import ExportImportButtons from "@/components/canvas/ExportImport";
 import LiveCursors from "@/components/canvas/LiveCursors";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Save } from "lucide-react";
+import CanvasNavbar from "@/components/CanvasNavbar";
 import { toast } from "sonner";
 
 const Board = () => {
@@ -34,7 +32,6 @@ const Board = () => {
     enabled: !!id,
   });
 
-  // Load canvas data on mount
   useEffect(() => {
     if (board?.canvas_data && !hasLoaded.current) {
       const parsed = Array.isArray(board.canvas_data) ? board.canvas_data : [];
@@ -87,21 +84,13 @@ const Board = () => {
 
   return (
     <div className="relative h-screen w-screen bg-background overflow-hidden">
-      {/* Back + board name + save */}
-      <div className="absolute top-3 left-3 z-20 flex items-center gap-2">
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate("/dashboard")}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <span className="text-sm font-medium bg-background/80 backdrop-blur-sm rounded-lg px-3 py-1.5 border">
-          {board?.name || "Board"}
-        </span>
-        <Button variant="outline" size="sm" className="h-8" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-          <Save className="mr-1 h-3.5 w-3.5" />
-          {saveMutation.isPending ? "Saving..." : "Save"}
-        </Button>
-        <ExportImportButtons boardName={board?.name || "board"} />
-      </div>
-
+      <CanvasNavbar
+        boardName={board?.name || "Board"}
+        showBack
+        onBack={() => navigate("/dashboard")}
+        onSave={() => saveMutation.mutate()}
+        savePending={saveMutation.isPending}
+      />
       <Toolbar />
       <PropertiesPanel />
       <CanvasRenderer />
