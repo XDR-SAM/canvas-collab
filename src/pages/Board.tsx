@@ -17,7 +17,7 @@ const Board = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { elements, setElements, pushHistory } = useCanvasStore();
+  const { elements, setElements, pushHistory, panOffset, zoom } = useCanvasStore();
   const hasLoaded = useRef(false);
 
   const { data: board, isLoading } = useQuery({
@@ -105,7 +105,7 @@ const Board = () => {
       <Toolbar />
       <PropertiesPanel />
       <CanvasRenderer />
-      <LiveCursors boardId={id!} panOffset={useCanvasStore.getState().panOffset} zoom={useCanvasStore.getState().zoom} />
+      <LiveCursors boardId={id!} panOffset={panOffset} zoom={zoom} />
     </div>
   );
 };
