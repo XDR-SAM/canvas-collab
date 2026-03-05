@@ -52,7 +52,7 @@ const Toolbar = () => {
             className="h-8 w-8"
             onClick={() => setLockTool(!lockTool)}
           >
-            {lockTool ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+            {lockTool ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="text-xs">

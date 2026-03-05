@@ -43,6 +43,8 @@ const Index = () => {
   useEffect(() => {
     const onShortcuts = () => setShortcutsOpen(true);
     const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "?" && !e.ctrlKey && !e.metaKey) setShortcutsOpen(true);
     };
     window.addEventListener("open-shortcuts", onShortcuts);
