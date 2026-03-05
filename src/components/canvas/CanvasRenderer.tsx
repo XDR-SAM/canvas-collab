@@ -183,15 +183,39 @@ const CanvasRenderer = () => {
     [snapToGrid, gridSize]
   );
 
-  // Prevent browser zoom on ctrl+wheel at document level
+  // Native wheel handler on canvas element for zoom + pan (passive: false to allow preventDefault)
   useEffect(() => {
-    const preventBrowserZoom = (e: WheelEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleNativeWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
+        e.stopPropagation();
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const state = useCanvasStore.getState();
+        const currentZoom = state.zoom;
+        const currentPan = state.panOffset;
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        const newZoom = Math.max(0.1, Math.min(5, currentZoom + delta));
+        const scale = newZoom / currentZoom;
+        const newPanX = mouseX - scale * (mouseX - currentPan.x);
+        const newPanY = mouseY - scale * (mouseY - currentPan.y);
+        state.setZoom(newZoom);
+        state.setPanOffset({ x: newPanX, y: newPanY });
+      } else {
+        const state = useCanvasStore.getState();
+        state.setPanOffset({
+          x: state.panOffset.x - e.deltaX,
+          y: state.panOffset.y - e.deltaY,
+        });
       }
     };
-    document.addEventListener("wheel", preventBrowserZoom, { passive: false });
-    return () => document.removeEventListener("wheel", preventBrowserZoom);
+
+    canvas.addEventListener("wheel", handleNativeWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", handleNativeWheel);
   }, []);
 
   // Handle paste for images
@@ -516,8 +540,11 @@ const CanvasRenderer = () => {
   );
 
   const handlePointerUp = useCallback(() => {
-    // End eraser drag
-    if (canvasRef.current) (canvasRef.current as any).__eraserActive = false;
+    // End eraser drag and push history once
+    if (canvasRef.current && (canvasRef.current as any).__eraserActive) {
+      (canvasRef.current as any).__eraserActive = false;
+      pushHistory();
+    }
 
     if (isPanning) { setIsPanning(false); return; }
     if (dragStart) {
@@ -536,28 +563,8 @@ const CanvasRenderer = () => {
     }
   }, [isPanning, isDrawing, drawingElement, dragStart, dragOffset, addElement, pushHistory, lockTool, setTool]);
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        const rect = canvasRef.current!.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        const newZoom = Math.max(0.1, Math.min(5, zoom + delta));
-        // Zoom toward cursor
-        const scale = newZoom / zoom;
-        const newPanX = mouseX - scale * (mouseX - panOffset.x);
-        const newPanY = mouseY - scale * (mouseY - panOffset.y);
-        setZoom(newZoom);
-        setPanOffset({ x: newPanX, y: newPanY });
-      } else {
-        setPanOffset({ x: panOffset.x - e.deltaX, y: panOffset.y - e.deltaY });
-      }
-    },
-    [zoom, panOffset, setZoom, setPanOffset]
-  );
+
+
 
   const handleTextFinish = () => {
     if (editingTextId) {
@@ -592,7 +599,6 @@ const CanvasRenderer = () => {
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          onWheel={handleWheel}
         />
         {editingEl && (
           <textarea
@@ -600,7 +606,7 @@ const CanvasRenderer = () => {
             value={editingEl.text || ""}
             onChange={(e) => updateElement(editingEl.id, { text: e.target.value })}
             onBlur={handleTextFinish}
-            onKeyDown={(e) => { if (e.key === "Escape") handleTextFinish(); }}
+            onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") handleTextFinish(); }}
             className="absolute border-none outline-none bg-transparent resize-none p-0 m-0"
             style={{
               left: editingEl.x * zoom + panOffset.x,

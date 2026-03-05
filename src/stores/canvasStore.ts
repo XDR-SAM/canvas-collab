@@ -113,7 +113,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   historyIndex: 0,
   zenMode: false,
   viewMode: false,
-  lockTool: false,
+  lockTool: true,
   canvasBackground: "#ffffff",
 
   setTool: (tool) => set({ tool, selectedIds: new Set() }),
@@ -148,7 +148,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   removeElements: (ids) => {
     const { elements } = get();
     set({ elements: elements.filter((el) => !ids.includes(el.id)), selectedIds: new Set() });
-    get().pushHistory();
   },
 
   setElements: (elements) => set({ elements }),

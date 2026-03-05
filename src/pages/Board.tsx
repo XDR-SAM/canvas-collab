@@ -61,6 +61,10 @@ const Board = () => {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+        if (!((e.ctrlKey || e.metaKey) && e.key === "s")) return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); saveMutation.mutate(); }
       if (e.key === "?" && !e.ctrlKey && !e.metaKey) setShortcutsOpen(true);
     };
