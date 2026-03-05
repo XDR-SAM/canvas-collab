@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import rough from "roughjs";
 import getStroke from "perfect-freehand";
 import { useCanvasStore, CanvasElement, Tool } from "@/stores/canvasStore";
+import CanvasContextMenu from "@/components/canvas/CanvasContextMenu";
 
 const genId = () => crypto.randomUUID();
 
@@ -83,8 +84,6 @@ function drawElement(ctx: CanvasRenderingContext2D, rc: any, el: CanvasElement, 
     case "diamond": {
       const cx = el.x + el.width / 2;
       const cy = el.y + el.height / 2;
-      const hw = el.width / 2;
-      const hh = el.height / 2;
       rc.polygon(
         [[cx, el.y], [el.x + el.width, cy], [cx, el.y + el.height], [el.x, cy]],
         options
@@ -98,21 +97,10 @@ function drawElement(ctx: CanvasRenderingContext2D, rc: any, el: CanvasElement, 
       const x2 = el.x + el.width;
       const y2 = el.y + el.height;
       rc.line(el.x, el.y, x2, y2, options);
-      // arrowhead
       const angle = Math.atan2(el.height, el.width);
       const headLen = 15;
-      rc.line(
-        x2, y2,
-        x2 - headLen * Math.cos(angle - Math.PI / 6),
-        y2 - headLen * Math.sin(angle - Math.PI / 6),
-        options
-      );
-      rc.line(
-        x2, y2,
-        x2 - headLen * Math.cos(angle + Math.PI / 6),
-        y2 - headLen * Math.sin(angle + Math.PI / 6),
-        options
-      );
+      rc.line(x2, y2, x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6), options);
+      rc.line(x2, y2, x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6), options);
       break;
     }
   }
@@ -121,9 +109,7 @@ function drawElement(ctx: CanvasRenderingContext2D, rc: any, el: CanvasElement, 
 
 function isPointInElement(x: number, y: number, el: CanvasElement): boolean {
   if (el.type === "pencil" && el.points) {
-    return el.points.some(
-      ([px, py]) => Math.hypot(px - x, py - y) < 10
-    );
+    return el.points.some(([px, py]) => Math.hypot(px - x, py - y) < 10);
   }
   if (el.type === "text") {
     const w = (el.text?.length || 1) * ((el.fontSize || 20) * 0.6);
@@ -151,7 +137,9 @@ const CanvasRenderer = () => {
     elements, tool, selectedIds, panOffset, zoom, showGrid, gridSize, snapToGrid,
     strokeColor, fillColor, strokeWidth, strokeStyle, opacity, roughness, fontSize, fontFamily,
     setSelectedIds, addElement, updateElement, removeElements, setPanOffset, setZoom,
-    pushHistory, setTool,
+    pushHistory, setTool, viewMode, lockTool, canvasBackground,
+    selectAll, bringToFront, sendToBack, flipElements,
+    zenMode, setZenMode, setViewMode, setShowGrid, setSnapToGrid,
   } = useCanvasStore();
 
   const [isDrawing, setIsDrawing] = useState(false);
@@ -190,7 +178,14 @@ const CanvasRenderer = () => {
     canvas.height = canvas.clientHeight * dpr;
     ctx.scale(dpr, dpr);
 
-    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    // Canvas background
+    if (canvasBackground === "transparent") {
+      ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    } else {
+      ctx.fillStyle = canvasBackground;
+      ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    }
+
     ctx.save();
     ctx.translate(panOffset.x, panOffset.y);
     ctx.scale(zoom, zoom);
@@ -204,25 +199,15 @@ const CanvasRenderer = () => {
       const endX = startX + canvas.clientWidth / zoom + gridSize;
       const endY = startY + canvas.clientHeight / zoom + gridSize;
       for (let x = startX; x < endX; x += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(x, startY);
-        ctx.lineTo(x, endY);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, endY); ctx.stroke();
       }
       for (let y = startY; y < endY; y += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(startX, y);
-        ctx.lineTo(endX, y);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(endX, y); ctx.stroke();
       }
     }
 
     const rc = rough.canvas(canvas);
-
-    // Draw elements
     elements.forEach((el) => drawElement(ctx, rc, el, zoom));
-
-    // Draw in-progress element
     if (drawingElement) drawElement(ctx, rc, drawingElement, zoom);
 
     // Selection highlight
@@ -236,26 +221,16 @@ const CanvasRenderer = () => {
         const xs = el.points.map((p) => p[0]);
         const ys = el.points.map((p) => p[1]);
         const padding = 5;
-        ctx.strokeRect(
-          Math.min(...xs) - padding,
-          Math.min(...ys) - padding,
-          Math.max(...xs) - Math.min(...xs) + padding * 2,
-          Math.max(...ys) - Math.min(...ys) + padding * 2
-        );
+        ctx.strokeRect(Math.min(...xs) - padding, Math.min(...ys) - padding, Math.max(...xs) - Math.min(...xs) + padding * 2, Math.max(...ys) - Math.min(...ys) + padding * 2);
       } else {
         const padding = 5;
-        ctx.strokeRect(
-          Math.min(el.x, el.x + el.width) - padding,
-          Math.min(el.y, el.y + el.height) - padding,
-          Math.abs(el.width) + padding * 2,
-          Math.abs(el.height) + padding * 2
-        );
+        ctx.strokeRect(Math.min(el.x, el.x + el.width) - padding, Math.min(el.y, el.y + el.height) - padding, Math.abs(el.width) + padding * 2, Math.abs(el.height) + padding * 2);
       }
       ctx.setLineDash([]);
     });
 
     ctx.restore();
-  }, [elements, drawingElement, panOffset, zoom, showGrid, gridSize, selectedIds]);
+  }, [elements, drawingElement, panOffset, zoom, showGrid, gridSize, selectedIds, canvasBackground]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -264,31 +239,71 @@ const CanvasRenderer = () => {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") return;
 
+      const store = useCanvasStore.getState();
+      const ids = Array.from(store.selectedIds);
+
+      // Ctrl/Meta combos
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === "z") { e.preventDefault(); useCanvasStore.getState().undo(); }
-        if (e.key === "y") { e.preventDefault(); useCanvasStore.getState().redo(); }
-        if (e.key === "d") { e.preventDefault(); const ids = Array.from(selectedIds); if (ids.length) useCanvasStore.getState().duplicateElements(ids); }
+        if (e.shiftKey) {
+          if (e.key === "[") { e.preventDefault(); if (ids.length) sendToBack(ids); return; }
+          if (e.key === "]") { e.preventDefault(); if (ids.length) bringToFront(ids); return; }
+          if (e.key === "z" || e.key === "Z") { e.preventDefault(); store.redo(); return; }
+        }
+        if (e.key === "z") { e.preventDefault(); store.undo(); return; }
+        if (e.key === "y") { e.preventDefault(); store.redo(); return; }
+        if (e.key === "d") { e.preventDefault(); if (ids.length) store.duplicateElements(ids); return; }
+        if (e.key === "a") { e.preventDefault(); selectAll(); return; }
+        if (e.key === "'") { e.preventDefault(); setShowGrid(!store.showGrid); return; }
+        if (e.key === "0") { e.preventDefault(); setZoom(1); return; }
         return;
       }
+
+      // Alt combos
+      if (e.altKey) {
+        if (e.key === "z" || e.key === "Z") { e.preventDefault(); setZenMode(!store.zenMode); return; }
+        if (e.key === "r" || e.key === "R") { e.preventDefault(); setViewMode(!store.viewMode); return; }
+        if (e.key === "s" || e.key === "S") { e.preventDefault(); setSnapToGrid(!store.snapToGrid); return; }
+        if (e.key === "/") { e.preventDefault(); window.dispatchEvent(new CustomEvent("open-properties")); return; }
+        return;
+      }
+
+      // Shift combos
+      if (e.shiftKey) {
+        if (e.key === "H") { e.preventDefault(); if (ids.length) flipElements(ids, "horizontal"); return; }
+        if (e.key === "V") { e.preventDefault(); if (ids.length) flipElements(ids, "vertical"); return; }
+        return;
+      }
+
+      // Single key shortcuts
+      if (viewMode) return;
 
       const keyMap: Record<string, Tool> = {
         v: "select", h: "pan", r: "rectangle", o: "circle", d: "diamond",
         a: "arrow", l: "line", p: "pencil", t: "text", e: "eraser",
       };
-      if (keyMap[e.key.toLowerCase()]) setTool(keyMap[e.key.toLowerCase()]);
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.size > 0) {
-        removeElements(Array.from(selectedIds));
+      const numMap: Record<string, Tool> = {
+        "1": "select", "2": "rectangle", "3": "diamond", "4": "circle",
+        "5": "arrow", "6": "line", "7": "pencil", "8": "text", "0": "eraser",
+      };
+
+      if (keyMap[e.key.toLowerCase()]) { setTool(keyMap[e.key.toLowerCase()]); return; }
+      if (numMap[e.key]) { setTool(numMap[e.key]); return; }
+      if (e.key === "q") { store.setLockTool(!store.lockTool); return; }
+      if ((e.key === "Delete" || e.key === "Backspace") && store.selectedIds.size > 0) {
+        removeElements(Array.from(store.selectedIds));
+        return;
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [selectedIds, editingTextId, setTool, removeElements]);
+  }, [editingTextId, setTool, removeElements, selectAll, bringToFront, sendToBack, flipElements, setZoom, setShowGrid, setSnapToGrid, setZenMode, setViewMode]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
+      if (viewMode) return;
       const { x, y } = toCanvas(e.clientX, e.clientY);
 
-      if (tool === "pan" || (e.button === 1)) {
+      if (tool === "pan" || e.button === 1) {
         setIsPanning(true);
         setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
         return;
@@ -305,8 +320,7 @@ const CanvasRenderer = () => {
         if (hit) {
           if (e.shiftKey) {
             const newSet = new Set(selectedIds);
-            if (newSet.has(hit.id)) newSet.delete(hit.id);
-            else newSet.add(hit.id);
+            if (newSet.has(hit.id)) newSet.delete(hit.id); else newSet.add(hit.id);
             setSelectedIds(newSet);
           } else {
             if (!selectedIds.has(hit.id)) setSelectedIds(new Set([hit.id]));
@@ -321,12 +335,8 @@ const CanvasRenderer = () => {
 
       if (tool === "text") {
         const newEl: CanvasElement = {
-          id: genId(),
-          type: "text",
-          x: snap(x), y: snap(y),
-          width: 0, height: 0,
-          text: "",
-          strokeColor, fillColor, strokeWidth, strokeStyle, opacity, fontSize, fontFamily,
+          id: genId(), type: "text", x: snap(x), y: snap(y), width: 0, height: 0,
+          text: "", strokeColor, fillColor, strokeWidth, strokeStyle, opacity, fontSize, fontFamily,
           roughness: 0, seed: Math.floor(Math.random() * 2 ** 31),
         };
         addElement(newEl);
@@ -339,17 +349,14 @@ const CanvasRenderer = () => {
       setIsDrawing(true);
       const seed = Math.floor(Math.random() * 2 ** 31);
       const newEl: CanvasElement = {
-        id: genId(),
-        type: tool === "pencil" ? "pencil" : tool as any,
-        x: snap(x), y: snap(y),
-        width: 0, height: 0,
+        id: genId(), type: tool === "pencil" ? "pencil" : tool as any,
+        x: snap(x), y: snap(y), width: 0, height: 0,
         points: tool === "pencil" ? [[x, y]] : undefined,
-        strokeColor, fillColor, strokeWidth, strokeStyle, opacity, roughness, seed,
-        fontSize, fontFamily,
+        strokeColor, fillColor, strokeWidth, strokeStyle, opacity, roughness, seed, fontSize, fontFamily,
       };
       setDrawingElement(newEl);
     },
-    [tool, toCanvas, elements, selectedIds, panOffset, snap, strokeColor, fillColor, strokeWidth, strokeStyle, opacity, roughness, fontSize, fontFamily, addElement, removeElements, setSelectedIds, setPanOffset]
+    [tool, toCanvas, elements, selectedIds, panOffset, snap, strokeColor, fillColor, strokeWidth, strokeStyle, opacity, roughness, fontSize, fontFamily, addElement, removeElements, setSelectedIds, setPanOffset, viewMode]
   );
 
   const handlePointerMove = useCallback(
@@ -358,7 +365,6 @@ const CanvasRenderer = () => {
         setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
         return;
       }
-
       if (dragStart && selectedIds.size > 0) {
         const { x, y } = toCanvas(e.clientX, e.clientY);
         const dx = x - dragStart.x;
@@ -376,48 +382,35 @@ const CanvasRenderer = () => {
         setDragOffset({ x: dx, y: dy });
         return;
       }
-
       if (!isDrawing || !drawingElement) return;
       const { x, y } = toCanvas(e.clientX, e.clientY);
-
       if (drawingElement.type === "pencil") {
-        setDrawingElement({
-          ...drawingElement,
-          points: [...(drawingElement.points || []), [x, y]],
-        });
+        setDrawingElement({ ...drawingElement, points: [...(drawingElement.points || []), [x, y]] });
       } else {
-        setDrawingElement({
-          ...drawingElement,
-          width: snap(x) - drawingElement.x,
-          height: snap(y) - drawingElement.y,
-        });
+        setDrawingElement({ ...drawingElement, width: snap(x) - drawingElement.x, height: snap(y) - drawingElement.y });
       }
     },
     [isPanning, isDrawing, drawingElement, panStart, dragStart, dragOffset, toCanvas, selectedIds, elements, snap, updateElement, setPanOffset]
   );
 
   const handlePointerUp = useCallback(() => {
-    if (isPanning) {
-      setIsPanning(false);
-      return;
-    }
-
+    if (isPanning) { setIsPanning(false); return; }
     if (dragStart) {
-      setDragStart(null);
-      setDragOffset(null);
-      if (dragOffset && (dragOffset.x !== 0 || dragOffset.y !== 0)) {
-        pushHistory();
-      }
+      setDragStart(null); setDragOffset(null);
+      if (dragOffset && (dragOffset.x !== 0 || dragOffset.y !== 0)) pushHistory();
       return;
     }
-
     if (isDrawing && drawingElement) {
       addElement(drawingElement);
       pushHistory();
       setDrawingElement(null);
       setIsDrawing(false);
+      // If lock tool is off, switch back to select after drawing
+      if (!lockTool) {
+        setTool("select");
+      }
     }
-  }, [isPanning, isDrawing, drawingElement, dragStart, dragOffset, addElement, pushHistory]);
+  }, [isPanning, isDrawing, drawingElement, dragStart, dragOffset, addElement, pushHistory, lockTool, setTool]);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -426,10 +419,7 @@ const CanvasRenderer = () => {
         const delta = e.deltaY > 0 ? -0.1 : 0.1;
         setZoom(zoom + delta);
       } else {
-        setPanOffset({
-          x: panOffset.x - e.deltaX,
-          y: panOffset.y - e.deltaY,
-        });
+        setPanOffset({ x: panOffset.x - e.deltaX, y: panOffset.y - e.deltaY });
       }
     },
     [zoom, panOffset, setZoom, setPanOffset]
@@ -447,46 +437,45 @@ const CanvasRenderer = () => {
     }
   };
 
-  // Find editing text element for the overlay input
   const editingEl = editingTextId ? elements.find((e) => e.id === editingTextId) : null;
 
   return (
-    <div className="relative w-full h-full overflow-hidden">
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full cursor-crosshair"
-        style={{
-          cursor: tool === "pan" ? "grab" : tool === "select" ? "default" : tool === "eraser" ? "cell" : "crosshair",
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onWheel={handleWheel}
-      />
-      {editingEl && (
-        <textarea
-          ref={textInputRef}
-          value={editingEl.text || ""}
-          onChange={(e) => updateElement(editingEl.id, { text: e.target.value })}
-          onBlur={handleTextFinish}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") handleTextFinish();
-          }}
-          className="absolute border-none outline-none bg-transparent resize-none"
+    <CanvasContextMenu>
+      <div className="relative w-full h-full overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full"
           style={{
-            left: editingEl.x * zoom + panOffset.x,
-            top: editingEl.y * zoom + panOffset.y,
-            fontSize: (editingEl.fontSize || 20) * zoom,
-            fontFamily: editingEl.fontFamily || "sans-serif",
-            color: editingEl.strokeColor,
-            lineHeight: 1.2,
-            minWidth: 100,
-            minHeight: 30,
+            cursor: viewMode ? "default" : tool === "pan" ? "grab" : tool === "select" ? "default" : tool === "eraser" ? "cell" : "crosshair",
           }}
-          autoFocus
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onWheel={handleWheel}
         />
-      )}
-    </div>
+        {editingEl && (
+          <textarea
+            ref={textInputRef}
+            value={editingEl.text || ""}
+            onChange={(e) => updateElement(editingEl.id, { text: e.target.value })}
+            onBlur={handleTextFinish}
+            onKeyDown={(e) => { if (e.key === "Escape") handleTextFinish(); }}
+            className="absolute border-none outline-none bg-transparent resize-none"
+            style={{
+              left: editingEl.x * zoom + panOffset.x,
+              top: editingEl.y * zoom + panOffset.y,
+              fontSize: (editingEl.fontSize || 20) * zoom,
+              fontFamily: editingEl.fontFamily || "sans-serif",
+              color: editingEl.strokeColor,
+              lineHeight: 1.2,
+              minWidth: 100,
+              minHeight: 30,
+            }}
+            autoFocus
+          />
+        )}
+      </div>
+    </CanvasContextMenu>
   );
 };
 
