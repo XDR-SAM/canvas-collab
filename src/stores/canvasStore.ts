@@ -30,6 +30,8 @@ export interface CanvasElement {
   fontFamily?: string;
   roughness: number;
   seed: number;
+  flipX?: boolean;
+  flipY?: boolean;
 }
 
 interface CanvasState {
@@ -51,6 +53,10 @@ interface CanvasState {
   zoom: number;
   history: CanvasElement[][];
   historyIndex: number;
+  zenMode: boolean;
+  viewMode: boolean;
+  lockTool: boolean;
+  canvasBackground: string;
 
   setTool: (tool: Tool) => void;
   setStrokeColor: (color: string) => void;
@@ -76,6 +82,12 @@ interface CanvasState {
   pushHistory: () => void;
   undo: () => void;
   redo: () => void;
+  setZenMode: (zen: boolean) => void;
+  setViewMode: (view: boolean) => void;
+  setLockTool: (lock: boolean) => void;
+  setCanvasBackground: (bg: string) => void;
+  selectAll: () => void;
+  flipElements: (ids: string[], axis: "horizontal" | "vertical") => void;
 }
 
 const genId = () => crypto.randomUUID();
@@ -99,6 +111,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   zoom: 1,
   history: [[]],
   historyIndex: 0,
+  zenMode: false,
+  viewMode: false,
+  lockTool: false,
+  canvasBackground: "#ffffff",
 
   setTool: (tool) => set({ tool, selectedIds: new Set() }),
   setStrokeColor: (strokeColor) => set({ strokeColor }),
@@ -114,6 +130,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setPanOffset: (panOffset) => set({ panOffset }),
   setZoom: (zoom) => set({ zoom: Math.max(0.1, Math.min(5, zoom)) }),
   setSelectedIds: (selectedIds) => set({ selectedIds }),
+  setZenMode: (zenMode) => set({ zenMode }),
+  setViewMode: (viewMode) => set({ viewMode }),
+  setLockTool: (lockTool) => set({ lockTool }),
+  setCanvasBackground: (canvasBackground) => set({ canvasBackground }),
 
   addElement: (element) => {
     const { elements } = get();
@@ -163,6 +183,23 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const selected = elements.filter((el) => ids.includes(el.id));
     const rest = elements.filter((el) => !ids.includes(el.id));
     set({ elements: [...selected, ...rest] });
+    get().pushHistory();
+  },
+
+  selectAll: () => {
+    const { elements } = get();
+    set({ selectedIds: new Set(elements.map((e) => e.id)), tool: "select" });
+  },
+
+  flipElements: (ids, axis) => {
+    const { elements } = get();
+    set({
+      elements: elements.map((el) => {
+        if (!ids.includes(el.id)) return el;
+        if (axis === "horizontal") return { ...el, flipX: !el.flipX };
+        return { ...el, flipY: !el.flipY };
+      }),
+    });
     get().pushHistory();
   },
 

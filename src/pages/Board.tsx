@@ -12,13 +12,15 @@ import CanvasNavbar from "@/components/CanvasNavbar";
 import ShareDialog from "@/components/canvas/ShareDialog";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import KeyboardShortcutsModal from "@/components/KeyboardShortcutsModal";
+import HamburgerMenu from "@/components/canvas/HamburgerMenu";
+import BottomControls from "@/components/canvas/BottomControls";
 import { toast } from "sonner";
 
 const Board = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { elements, setElements, pushHistory, panOffset, zoom } = useCanvasStore();
+  const { elements, setElements, pushHistory, panOffset, zoom, zenMode } = useCanvasStore();
   const hasLoaded = useRef(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -26,11 +28,7 @@ const Board = () => {
   const { data: board, isLoading } = useQuery({
     queryKey: ["board", id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("boards")
-        .select("*")
-        .eq("id", id!)
-        .single();
+      const { data, error } = await supabase.from("boards").select("*").eq("id", id!).single();
       if (error) throw error;
       return data;
     },
@@ -48,38 +46,28 @@ const Board = () => {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from("boards")
-        .update({ canvas_data: elements as any })
-        .eq("id", id!);
+      const { error } = await supabase.from("boards").update({ canvas_data: elements as any }).eq("id", id!);
       if (error) throw error;
     },
     onSuccess: () => toast.success("Board saved!"),
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Auto-save every 30s
   useEffect(() => {
     if (!id || !hasLoaded.current) return;
-    const interval = setInterval(() => {
-      if (elements.length > 0) saveMutation.mutate();
-    }, 30000);
+    const interval = setInterval(() => { if (elements.length > 0) saveMutation.mutate(); }, 30000);
     return () => clearInterval(interval);
   }, [id, elements]);
 
-  // Save on Ctrl+S, ? for shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        saveMutation.mutate();
-      }
-      if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
-        setShortcutsOpen(true);
-      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); saveMutation.mutate(); }
+      if (e.key === "?" && !e.ctrlKey && !e.metaKey) setShortcutsOpen(true);
     };
+    const onShortcuts = () => setShortcutsOpen(true);
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("open-shortcuts", onShortcuts);
+    return () => { window.removeEventListener("keydown", handler); window.removeEventListener("open-shortcuts", onShortcuts); };
   }, [saveMutation]);
 
   if (isLoading) {
@@ -93,18 +81,32 @@ const Board = () => {
   return (
     <div className="relative h-screen w-screen bg-background overflow-hidden">
       <AnnouncementBanner />
-      <CanvasNavbar
-        boardName={board?.name || "Board"}
-        showBack
-        onBack={() => navigate("/dashboard")}
-        onSave={() => saveMutation.mutate()}
-        savePending={saveMutation.isPending}
-        onShare={() => setShareOpen(true)}
-      />
-      <Toolbar />
-      <PropertiesPanel />
+
+      {!zenMode && (
+        <div className="absolute top-3 left-3 z-30">
+          <HamburgerMenu boardName={board?.name || "Board"} onSave={() => saveMutation.mutate()} />
+        </div>
+      )}
+
+      {!zenMode && <Toolbar />}
+
+      {!zenMode && (
+        <CanvasNavbar
+          boardName={board?.name || "Board"}
+          showBack
+          onBack={() => navigate("/dashboard")}
+          onSave={() => saveMutation.mutate()}
+          savePending={saveMutation.isPending}
+          onShare={() => setShareOpen(true)}
+        />
+      )}
+
+      {!zenMode && <PropertiesPanel />}
       <CanvasRenderer />
       <LiveCursors boardId={id!} panOffset={panOffset} zoom={zoom} />
+
+      {!zenMode && <BottomControls onOpenShortcuts={() => setShortcutsOpen(true)} />}
+
       <ShareDialog boardId={id!} open={shareOpen} onOpenChange={setShareOpen} />
       <KeyboardShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>

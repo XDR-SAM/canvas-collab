@@ -1,30 +1,29 @@
 import { useCanvasStore, Tool } from "@/stores/canvasStore";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Separator } from "@/components/ui/separator";
 import {
   MousePointer2, Hand, Square, Circle, Diamond, ArrowUpRight,
-  Minus, Pencil, Type, Eraser, Undo2, Redo2, Grid3X3, Magnet, ZoomIn, ZoomOut,
+  Minus, Pencil, Type, Eraser, Lock, Unlock,
 } from "lucide-react";
 
 const tools: { tool: Tool; icon: any; label: string; shortcut: string }[] = [
-  { tool: "select", icon: MousePointer2, label: "Select", shortcut: "V" },
-  { tool: "pan", icon: Hand, label: "Pan", shortcut: "H" },
-  { tool: "rectangle", icon: Square, label: "Rectangle", shortcut: "R" },
-  { tool: "circle", icon: Circle, label: "Circle", shortcut: "O" },
-  { tool: "diamond", icon: Diamond, label: "Diamond", shortcut: "D" },
-  { tool: "arrow", icon: ArrowUpRight, label: "Arrow", shortcut: "A" },
-  { tool: "line", icon: Minus, label: "Line", shortcut: "L" },
-  { tool: "pencil", icon: Pencil, label: "Pencil", shortcut: "P" },
-  { tool: "text", icon: Type, label: "Text", shortcut: "T" },
-  { tool: "eraser", icon: Eraser, label: "Eraser", shortcut: "E" },
+  { tool: "pan", icon: Hand, label: "Hand (panning)", shortcut: "H" },
+  { tool: "select", icon: MousePointer2, label: "Selection", shortcut: "V / 1" },
+  { tool: "rectangle", icon: Square, label: "Rectangle", shortcut: "R / 2" },
+  { tool: "diamond", icon: Diamond, label: "Diamond", shortcut: "D / 3" },
+  { tool: "circle", icon: Circle, label: "Ellipse", shortcut: "O / 4" },
+  { tool: "arrow", icon: ArrowUpRight, label: "Arrow", shortcut: "A / 5" },
+  { tool: "line", icon: Minus, label: "Line", shortcut: "L / 6" },
+  { tool: "pencil", icon: Pencil, label: "Draw", shortcut: "P / 7" },
+  { tool: "text", icon: Type, label: "Text", shortcut: "T / 8" },
+  { tool: "eraser", icon: Eraser, label: "Eraser", shortcut: "E / 0" },
 ];
 
 const Toolbar = () => {
-  const { tool, setTool, undo, redo, showGrid, setShowGrid, snapToGrid, setSnapToGrid, zoom, setZoom, historyIndex, history } = useCanvasStore();
+  const { tool, setTool, lockTool, setLockTool } = useCanvasStore();
 
   return (
-    <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-xl border bg-background/95 backdrop-blur-sm p-1.5 shadow-lg">
+    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-0.5 rounded-xl border bg-background/95 backdrop-blur-sm p-1 shadow-lg">
       {tools.map((t) => (
         <Tooltip key={t.tool}>
           <TooltipTrigger asChild>
@@ -38,60 +37,28 @@ const Toolbar = () => {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
-            {t.label} ({t.shortcut})
+            {t.label} <kbd className="ml-1 rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">{t.shortcut}</kbd>
           </TooltipContent>
         </Tooltip>
       ))}
 
-      <Separator orientation="vertical" className="mx-1 h-6" />
+      <div className="mx-0.5 h-5 w-px bg-border" />
 
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={undo} disabled={historyIndex <= 0}>
-            <Undo2 className="h-4 w-4" />
+          <Button
+            variant={lockTool ? "default" : "ghost"}
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setLockTool(!lockTool)}
+          >
+            {lockTool ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-xs">Undo (Ctrl+Z)</TooltipContent>
+        <TooltipContent side="bottom" className="text-xs">
+          Keep tool active <kbd className="ml-1 rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">Q</kbd>
+        </TooltipContent>
       </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={redo} disabled={historyIndex >= history.length - 1}>
-            <Redo2 className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-xs">Redo (Ctrl+Y)</TooltipContent>
-      </Tooltip>
-
-      <Separator orientation="vertical" className="mx-1 h-6" />
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant={showGrid ? "default" : "ghost"} size="icon" className="h-8 w-8" onClick={() => setShowGrid(!showGrid)}>
-            <Grid3X3 className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-xs">Toggle Grid</TooltipContent>
-      </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant={snapToGrid ? "default" : "ghost"} size="icon" className="h-8 w-8" onClick={() => setSnapToGrid(!snapToGrid)}>
-            <Magnet className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-xs">Snap to Grid</TooltipContent>
-      </Tooltip>
-
-      <Separator orientation="vertical" className="mx-1 h-6" />
-
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(zoom - 0.1)}>
-        <ZoomOut className="h-4 w-4" />
-      </Button>
-      <span className="text-xs w-10 text-center font-mono">{Math.round(zoom * 100)}%</span>
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(zoom + 0.1)}>
-        <ZoomIn className="h-4 w-4" />
-      </Button>
     </div>
   );
 };
