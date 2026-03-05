@@ -26,6 +26,12 @@ function getStrokeDash(style: string): number[] {
   return [];
 }
 
+function getFontString(el: CanvasElement) {
+  const size = el.fontSize || 20;
+  const family = el.fontFamily || "'Caveat', cursive";
+  return `${size}px ${family}`;
+}
+
 function drawElement(ctx: CanvasRenderingContext2D, rc: any, el: CanvasElement, zoom: number) {
   ctx.save();
   ctx.globalAlpha = el.opacity;
@@ -47,13 +53,21 @@ function drawElement(ctx: CanvasRenderingContext2D, rc: any, el: CanvasElement, 
   }
 
   if (el.type === "text") {
-    ctx.font = `${el.fontSize || 20}px ${el.fontFamily || "sans-serif"}`;
+    ctx.font = getFontString(el);
     ctx.fillStyle = el.strokeColor;
     ctx.textBaseline = "top";
     const lines = (el.text || "").split("\n");
     lines.forEach((line, i) => {
       ctx.fillText(line, el.x, el.y + i * (el.fontSize || 20) * 1.2);
     });
+    ctx.restore();
+    return;
+  }
+
+  if (el.type === "image" && (el as any).imageElement) {
+    try {
+      ctx.drawImage((el as any).imageElement, el.x, el.y, el.width, el.height);
+    } catch {}
     ctx.restore();
     return;
   }
@@ -149,6 +163,7 @@ const CanvasRenderer = () => {
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const [spaceHeld, setSpaceHeld] = useState(false);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
 
   const toCanvas = useCallback(
@@ -168,6 +183,88 @@ const CanvasRenderer = () => {
     [snapToGrid, gridSize]
   );
 
+  // Prevent browser zoom on ctrl+wheel at document level
+  useEffect(() => {
+    const preventBrowserZoom = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener("wheel", preventBrowserZoom, { passive: false });
+    return () => document.removeEventListener("wheel", preventBrowserZoom);
+  }, []);
+
+  // Handle paste for images
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const blob = item.getAsFile();
+          if (!blob) continue;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            const img = new Image();
+            img.onload = () => {
+              const maxW = 400;
+              const scale = img.width > maxW ? maxW / img.width : 1;
+              const w = img.width * scale;
+              const h = img.height * scale;
+              const cx = (canvasRef.current?.clientWidth || 800) / 2;
+              const cy = (canvasRef.current?.clientHeight || 600) / 2;
+              const canvasPos = {
+                x: (cx - panOffset.x) / zoom - w / 2,
+                y: (cy - panOffset.y) / zoom - h / 2,
+              };
+              const newEl: any = {
+                id: genId(),
+                type: "image" as any,
+                x: canvasPos.x,
+                y: canvasPos.y,
+                width: w,
+                height: h,
+                strokeColor: "transparent",
+                fillColor: "transparent",
+                strokeWidth: 0,
+                strokeStyle: "solid",
+                opacity: 1,
+                roughness: 0,
+                seed: Math.floor(Math.random() * 2 ** 31),
+                imageData: dataUrl,
+                imageElement: img,
+              };
+              addElement(newEl);
+              pushHistory();
+              setSelectedIds(new Set([newEl.id]));
+              setTool("select");
+            };
+            img.src = dataUrl;
+          };
+          reader.readAsDataURL(blob);
+          break;
+        }
+      }
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [addElement, pushHistory, setSelectedIds, setTool, panOffset, zoom]);
+
+  // Restore image elements from imageData on load
+  useEffect(() => {
+    elements.forEach((el: any) => {
+      if (el.type === "image" && el.imageData && !el.imageElement) {
+        const img = new Image();
+        img.onload = () => {
+          updateElement(el.id, { imageElement: img } as any);
+        };
+        img.src = el.imageData;
+      }
+    });
+  }, [elements.length]);
+
   // Render
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -178,7 +275,6 @@ const CanvasRenderer = () => {
     canvas.height = canvas.clientHeight * dpr;
     ctx.scale(dpr, dpr);
 
-    // Canvas background
     if (canvasBackground === "transparent") {
       ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
     } else {
@@ -190,7 +286,6 @@ const CanvasRenderer = () => {
     ctx.translate(panOffset.x, panOffset.y);
     ctx.scale(zoom, zoom);
 
-    // Grid
     if (showGrid) {
       ctx.strokeStyle = "hsl(var(--border))";
       ctx.lineWidth = 0.5;
@@ -232,6 +327,24 @@ const CanvasRenderer = () => {
     ctx.restore();
   }, [elements, drawingElement, panOffset, zoom, showGrid, gridSize, selectedIds, canvasBackground]);
 
+  // Space key for panning
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !editingTextId) {
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") return;
+        e.preventDefault();
+        setSpaceHeld(true);
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === "Space") setSpaceHeld(false);
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
+  }, [editingTextId]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -242,7 +355,6 @@ const CanvasRenderer = () => {
       const store = useCanvasStore.getState();
       const ids = Array.from(store.selectedIds);
 
-      // Ctrl/Meta combos
       if (e.ctrlKey || e.metaKey) {
         if (e.shiftKey) {
           if (e.key === "[") { e.preventDefault(); if (ids.length) sendToBack(ids); return; }
@@ -258,7 +370,6 @@ const CanvasRenderer = () => {
         return;
       }
 
-      // Alt combos
       if (e.altKey) {
         if (e.key === "z" || e.key === "Z") { e.preventDefault(); setZenMode(!store.zenMode); return; }
         if (e.key === "r" || e.key === "R") { e.preventDefault(); setViewMode(!store.viewMode); return; }
@@ -267,14 +378,12 @@ const CanvasRenderer = () => {
         return;
       }
 
-      // Shift combos
       if (e.shiftKey) {
         if (e.key === "H") { e.preventDefault(); if (ids.length) flipElements(ids, "horizontal"); return; }
         if (e.key === "V") { e.preventDefault(); if (ids.length) flipElements(ids, "vertical"); return; }
         return;
       }
 
-      // Single key shortcuts
       if (viewMode) return;
 
       const keyMap: Record<string, Tool> = {
@@ -303,15 +412,18 @@ const CanvasRenderer = () => {
       if (viewMode) return;
       const { x, y } = toCanvas(e.clientX, e.clientY);
 
-      if (tool === "pan" || e.button === 1) {
+      // Space+drag or middle mouse = pan
+      if (spaceHeld || tool === "pan" || e.button === 1) {
         setIsPanning(true);
         setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
         return;
       }
 
       if (tool === "eraser") {
+        // Start eraser drag - erase anything touched
         const hit = [...elements].reverse().find((el) => isPointInElement(x, y, el));
         if (hit) removeElements([hit.id]);
+        (canvasRef.current as any).__eraserActive = true;
         return;
       }
 
@@ -336,7 +448,8 @@ const CanvasRenderer = () => {
       if (tool === "text") {
         const newEl: CanvasElement = {
           id: genId(), type: "text", x: snap(x), y: snap(y), width: 0, height: 0,
-          text: "", strokeColor, fillColor, strokeWidth, strokeStyle, opacity, fontSize, fontFamily,
+          text: "", strokeColor, fillColor, strokeWidth, strokeStyle, opacity, fontSize,
+          fontFamily: fontFamily || "'Caveat', cursive",
           roughness: 0, seed: Math.floor(Math.random() * 2 ** 31),
         };
         addElement(newEl);
@@ -356,7 +469,7 @@ const CanvasRenderer = () => {
       };
       setDrawingElement(newEl);
     },
-    [tool, toCanvas, elements, selectedIds, panOffset, snap, strokeColor, fillColor, strokeWidth, strokeStyle, opacity, roughness, fontSize, fontFamily, addElement, removeElements, setSelectedIds, setPanOffset, viewMode]
+    [tool, toCanvas, elements, selectedIds, panOffset, snap, strokeColor, fillColor, strokeWidth, strokeStyle, opacity, roughness, fontSize, fontFamily, addElement, removeElements, setSelectedIds, setPanOffset, viewMode, spaceHeld]
   );
 
   const handlePointerMove = useCallback(
@@ -365,6 +478,15 @@ const CanvasRenderer = () => {
         setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
         return;
       }
+
+      // Smooth eraser: erase anything the pointer passes over
+      if (tool === "eraser" && (canvasRef.current as any).__eraserActive) {
+        const { x, y } = toCanvas(e.clientX, e.clientY);
+        const hit = [...elements].reverse().find((el) => isPointInElement(x, y, el));
+        if (hit) removeElements([hit.id]);
+        return;
+      }
+
       if (dragStart && selectedIds.size > 0) {
         const { x, y } = toCanvas(e.clientX, e.clientY);
         const dx = x - dragStart.x;
@@ -390,10 +512,13 @@ const CanvasRenderer = () => {
         setDrawingElement({ ...drawingElement, width: snap(x) - drawingElement.x, height: snap(y) - drawingElement.y });
       }
     },
-    [isPanning, isDrawing, drawingElement, panStart, dragStart, dragOffset, toCanvas, selectedIds, elements, snap, updateElement, setPanOffset]
+    [isPanning, isDrawing, drawingElement, panStart, dragStart, dragOffset, toCanvas, selectedIds, elements, snap, updateElement, setPanOffset, tool, removeElements]
   );
 
   const handlePointerUp = useCallback(() => {
+    // End eraser drag
+    if (canvasRef.current) (canvasRef.current as any).__eraserActive = false;
+
     if (isPanning) { setIsPanning(false); return; }
     if (dragStart) {
       setDragStart(null); setDragOffset(null);
@@ -405,7 +530,6 @@ const CanvasRenderer = () => {
       pushHistory();
       setDrawingElement(null);
       setIsDrawing(false);
-      // If lock tool is off, switch back to select after drawing
       if (!lockTool) {
         setTool("select");
       }
@@ -416,8 +540,18 @@ const CanvasRenderer = () => {
     (e: React.WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
+        e.stopPropagation();
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
         const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        setZoom(zoom + delta);
+        const newZoom = Math.max(0.1, Math.min(5, zoom + delta));
+        // Zoom toward cursor
+        const scale = newZoom / zoom;
+        const newPanX = mouseX - scale * (mouseX - panOffset.x);
+        const newPanY = mouseY - scale * (mouseY - panOffset.y);
+        setZoom(newZoom);
+        setPanOffset({ x: newPanX, y: newPanY });
       } else {
         setPanOffset({ x: panOffset.x - e.deltaX, y: panOffset.y - e.deltaY });
       }
@@ -439,15 +573,22 @@ const CanvasRenderer = () => {
 
   const editingEl = editingTextId ? elements.find((e) => e.id === editingTextId) : null;
 
+  const getCursor = () => {
+    if (viewMode) return "default";
+    if (spaceHeld || isPanning) return "grabbing";
+    if (tool === "pan") return "grab";
+    if (tool === "select") return "default";
+    if (tool === "eraser") return "cell";
+    return "crosshair";
+  };
+
   return (
     <CanvasContextMenu>
       <div className="relative w-full h-full overflow-hidden">
         <canvas
           ref={canvasRef}
           className="w-full h-full"
-          style={{
-            cursor: viewMode ? "default" : tool === "pan" ? "grab" : tool === "select" ? "default" : tool === "eraser" ? "cell" : "crosshair",
-          }}
+          style={{ cursor: getCursor() }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -460,16 +601,18 @@ const CanvasRenderer = () => {
             onChange={(e) => updateElement(editingEl.id, { text: e.target.value })}
             onBlur={handleTextFinish}
             onKeyDown={(e) => { if (e.key === "Escape") handleTextFinish(); }}
-            className="absolute border-none outline-none bg-transparent resize-none"
+            className="absolute border-none outline-none bg-transparent resize-none p-0 m-0"
             style={{
               left: editingEl.x * zoom + panOffset.x,
               top: editingEl.y * zoom + panOffset.y,
               fontSize: (editingEl.fontSize || 20) * zoom,
-              fontFamily: editingEl.fontFamily || "sans-serif",
+              fontFamily: editingEl.fontFamily || "'Caveat', cursive",
               color: editingEl.strokeColor,
               lineHeight: 1.2,
-              minWidth: 100,
-              minHeight: 30,
+              minWidth: 200,
+              minHeight: 40,
+              caretColor: editingEl.strokeColor,
+              zIndex: 50,
             }}
             autoFocus
           />

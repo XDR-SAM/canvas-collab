@@ -14,7 +14,7 @@ export type Tool =
 
 export interface CanvasElement {
   id: string;
-  type: "rectangle" | "circle" | "diamond" | "arrow" | "line" | "pencil" | "text";
+  type: "rectangle" | "circle" | "diamond" | "arrow" | "line" | "pencil" | "text" | "image";
   x: number;
   y: number;
   width: number;
@@ -102,7 +102,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   strokeStyle: "solid",
   opacity: 1,
   fontSize: 20,
-  fontFamily: "sans-serif",
+  fontFamily: "'Caveat', cursive",
   roughness: 1,
   showGrid: false,
   snapToGrid: false,

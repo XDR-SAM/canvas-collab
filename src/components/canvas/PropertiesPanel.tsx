@@ -1,229 +1,201 @@
 import { useCanvasStore } from "@/stores/canvasStore";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Trash2, Copy, ArrowUpToLine, ArrowDownToLine, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  ArrowUpToLine, ArrowDownToLine, ArrowUp, ArrowDown,
+} from "lucide-react";
 import { useState, useEffect } from "react";
+
+const STROKE_COLORS = [
+  "#1e1e1e", "#e03131", "#2f9e44", "#1971c2", "#f08c00", "#000000",
+];
+const BG_COLORS = [
+  "transparent", "#a5d8ff", "#b2f2bb", "#ffec99", "#ffc9c9", "#eee",
+];
 
 const PropertiesPanel = () => {
   const {
-    selectedIds, elements,
+    selectedIds, elements, tool,
     strokeColor, setStrokeColor,
     fillColor, setFillColor,
     strokeWidth, setStrokeWidth,
-    strokeStyle, setStrokeStyle,
     opacity, setOpacity,
-    fontSize, setFontSize,
-    fontFamily, setFontFamily,
-    roughness, setRoughness,
     removeElements, duplicateElements, bringToFront, sendToBack,
     updateElement,
   } = useCanvasStore();
 
-  const [collapsed, setCollapsed] = useState(true);
+  const [visible, setVisible] = useState(false);
   const selectedArr = Array.from(selectedIds);
   const hasSelection = selectedArr.length > 0;
   const selectedElement = hasSelection ? elements.find((e) => e.id === selectedArr[0]) : null;
 
-  // Auto-open when selecting, auto-close when deselecting
-  useEffect(() => {
-    if (hasSelection) setCollapsed(false);
-  }, [hasSelection]);
+  // Show panel when drawing tool is active or element selected
+  const drawingTools = ["rectangle", "circle", "diamond", "arrow", "line", "pencil", "text"];
+  const showForTool = drawingTools.includes(tool);
 
-  if (collapsed) {
-    return (
-      <Button
-        variant="outline"
-        size="icon"
-        className="absolute right-3 top-14 z-20 h-8 w-8 bg-background/90 backdrop-blur-sm"
-        onClick={() => setCollapsed(false)}
-      >
-        <PanelRightOpen className="h-4 w-4" />
-      </Button>
-    );
-  }
+  useEffect(() => {
+    if (hasSelection || showForTool) setVisible(true);
+    else setVisible(false);
+  }, [hasSelection, showForTool]);
+
+  useEffect(() => {
+    const handler = () => setVisible(true);
+    window.addEventListener("open-properties", handler);
+    return () => window.removeEventListener("open-properties", handler);
+  }, []);
+
+  if (!visible) return null;
+
+  const currentStroke = selectedElement?.strokeColor ?? strokeColor;
+  const currentFill = selectedElement?.fillColor ?? fillColor;
+  const currentWidth = selectedElement?.strokeWidth ?? strokeWidth;
+  const currentOpacity = selectedElement?.opacity ?? opacity;
 
   return (
-    <div className="absolute right-3 top-14 z-20 w-56 rounded-xl border bg-background/95 backdrop-blur-sm p-4 shadow-lg space-y-4 max-h-[calc(100vh-5rem)] overflow-y-auto">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Properties</h3>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCollapsed(true)}>
-          <PanelRightClose className="h-3.5 w-3.5" />
-        </Button>
+    <div className="absolute left-3 top-16 z-20 w-48 rounded-xl border bg-background/95 backdrop-blur-sm p-3 shadow-lg space-y-3 max-h-[calc(100vh-5rem)] overflow-y-auto">
+      {/* Stroke colors */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-medium text-muted-foreground">Stroke</Label>
+        <div className="flex gap-1.5 flex-wrap">
+          {STROKE_COLORS.map((c) => (
+            <button
+              key={c}
+              className={`w-7 h-7 rounded-lg border-2 transition-all ${currentStroke === c ? "border-primary ring-2 ring-primary/30 scale-110" : "border-border hover:scale-105"}`}
+              style={{ backgroundColor: c }}
+              onClick={() => {
+                setStrokeColor(c);
+                if (selectedElement) updateElement(selectedElement.id, { strokeColor: c });
+              }}
+            />
+          ))}
+          <label className="w-7 h-7 rounded-lg border-2 border-border overflow-hidden cursor-pointer hover:scale-105 transition-all relative">
+            <input
+              type="color"
+              value={currentStroke}
+              onChange={(e) => {
+                setStrokeColor(e.target.value);
+                if (selectedElement) updateElement(selectedElement.id, { strokeColor: e.target.value });
+              }}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            />
+            <div className="w-full h-full" style={{ background: "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)" }} />
+          </label>
+        </div>
       </div>
 
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Stroke</Label>
-          <div className="flex gap-2">
+      {/* Background colors */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-medium text-muted-foreground">Background</Label>
+        <div className="flex gap-1.5 flex-wrap">
+          {BG_COLORS.map((c) => (
+            <button
+              key={c}
+              className={`w-7 h-7 rounded-lg border-2 transition-all ${currentFill === c ? "border-primary ring-2 ring-primary/30 scale-110" : "border-border hover:scale-105"}`}
+              style={{
+                backgroundColor: c === "transparent" ? undefined : c,
+                backgroundImage: c === "transparent" ? "linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)" : undefined,
+                backgroundSize: c === "transparent" ? "8px 8px" : undefined,
+                backgroundPosition: c === "transparent" ? "0 0, 4px 4px" : undefined,
+              }}
+              onClick={() => {
+                setFillColor(c);
+                if (selectedElement) updateElement(selectedElement.id, { fillColor: c });
+              }}
+            />
+          ))}
+          <label className="w-7 h-7 rounded-lg border-2 border-border overflow-hidden cursor-pointer hover:scale-105 transition-all relative">
             <input
               type="color"
-              value={selectedElement?.strokeColor ?? strokeColor}
-              onChange={(e) => {
-                setStrokeColor(e.target.value);
-                if (selectedElement) updateElement(selectedElement.id, { strokeColor: e.target.value });
-              }}
-              className="h-8 w-8 rounded border cursor-pointer"
-            />
-            <Input
-              value={selectedElement?.strokeColor ?? strokeColor}
-              onChange={(e) => {
-                setStrokeColor(e.target.value);
-                if (selectedElement) updateElement(selectedElement.id, { strokeColor: e.target.value });
-              }}
-              className="h-8 text-xs font-mono"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-xs">Fill</Label>
-          <div className="flex gap-2">
-            <input
-              type="color"
-              value={selectedElement?.fillColor === "transparent" ? "#ffffff" : (selectedElement?.fillColor ?? fillColor === "transparent" ? "#ffffff" : fillColor)}
+              value={currentFill === "transparent" ? "#ffffff" : currentFill}
               onChange={(e) => {
                 setFillColor(e.target.value);
                 if (selectedElement) updateElement(selectedElement.id, { fillColor: e.target.value });
               }}
-              className="h-8 w-8 rounded border cursor-pointer"
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
             />
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={() => {
-                setFillColor("transparent");
-                if (selectedElement) updateElement(selectedElement.id, { fillColor: "transparent" });
-              }}
-            >
-              None
-            </Button>
-          </div>
+            <div className="w-full h-full" style={{ background: "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)" }} />
+          </label>
         </div>
-
-        <div className="space-y-1">
-          <Label className="text-xs">Stroke Width</Label>
-          <div className="flex gap-2">
-            {[1, 2, 4].map((w) => (
-              <Button
-                key={w}
-                variant={(selectedElement?.strokeWidth ?? strokeWidth) === w ? "default" : "outline"}
-                size="sm"
-                className="h-8 flex-1 text-xs"
-                onClick={() => {
-                  setStrokeWidth(w);
-                  if (selectedElement) updateElement(selectedElement.id, { strokeWidth: w });
-                }}
-              >
-                {w === 1 ? "Thin" : w === 2 ? "Med" : "Thick"}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-xs">Stroke Style</Label>
-          <Select
-            value={selectedElement?.strokeStyle ?? strokeStyle}
-            onValueChange={(v: any) => {
-              setStrokeStyle(v);
-              if (selectedElement) updateElement(selectedElement.id, { strokeStyle: v });
-            }}
-          >
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="solid">Solid</SelectItem>
-              <SelectItem value="dashed">Dashed</SelectItem>
-              <SelectItem value="dotted">Dotted</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-xs">Opacity: {Math.round((selectedElement?.opacity ?? opacity) * 100)}%</Label>
-          <Slider
-            value={[selectedElement?.opacity ?? opacity]}
-            onValueChange={([v]) => {
-              setOpacity(v);
-              if (selectedElement) updateElement(selectedElement.id, { opacity: v });
-            }}
-            min={0.1}
-            max={1}
-            step={0.05}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-xs">Roughness: {(selectedElement?.roughness ?? roughness).toFixed(1)}</Label>
-          <Slider
-            value={[selectedElement?.roughness ?? roughness]}
-            onValueChange={([v]) => {
-              setRoughness(v);
-              if (selectedElement) updateElement(selectedElement.id, { roughness: v });
-            }}
-            min={0}
-            max={3}
-            step={0.5}
-          />
-        </div>
-
-        {selectedElement?.type === "text" && (
-          <>
-            <div className="space-y-1">
-              <Label className="text-xs">Font Size</Label>
-              <Input
-                type="number"
-                value={selectedElement.fontSize ?? fontSize}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setFontSize(v);
-                  updateElement(selectedElement.id, { fontSize: v });
-                }}
-                className="h-8 text-xs"
-                min={8}
-                max={128}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Font Family</Label>
-              <Select
-                value={selectedElement.fontFamily ?? fontFamily}
-                onValueChange={(v) => {
-                  setFontFamily(v);
-                  updateElement(selectedElement.id, { fontFamily: v });
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sans-serif">Sans Serif</SelectItem>
-                  <SelectItem value="serif">Serif</SelectItem>
-                  <SelectItem value="monospace">Monospace</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        )}
       </div>
 
+      {/* Stroke width */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-medium text-muted-foreground">Stroke width</Label>
+        <div className="flex gap-1.5">
+          {[1, 2, 4].map((w) => (
+            <button
+              key={w}
+              className={`flex-1 h-8 rounded-lg border-2 flex items-center justify-center transition-all ${currentWidth === w ? "border-primary bg-primary/10" : "border-border hover:bg-accent"}`}
+              onClick={() => {
+                setStrokeWidth(w);
+                if (selectedElement) updateElement(selectedElement.id, { strokeWidth: w });
+              }}
+            >
+              <div className="rounded-full bg-foreground" style={{ width: `${w * 8 + 8}px`, height: `${w}px` }} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Opacity */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <Label className="text-[11px] font-medium text-muted-foreground">Opacity</Label>
+          <span className="text-[10px] text-muted-foreground">{Math.round(currentOpacity * 100)}</span>
+        </div>
+        <Slider
+          value={[currentOpacity * 100]}
+          onValueChange={([v]) => {
+            const val = v / 100;
+            setOpacity(val);
+            if (selectedElement) updateElement(selectedElement.id, { opacity: val });
+          }}
+          min={0}
+          max={100}
+          step={5}
+          className="w-full"
+        />
+      </div>
+
+      {/* Layers */}
       {hasSelection && (
-        <div className="space-y-2 pt-2 border-t">
-          <Label className="text-xs font-semibold">Actions</Label>
-          <div className="grid grid-cols-2 gap-1.5">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => duplicateElements(selectedArr)}>
-              <Copy className="mr-1 h-3 w-3" /> Duplicate
-            </Button>
-            <Button variant="destructive" size="sm" className="h-8 text-xs" onClick={() => removeElements(selectedArr)}>
-              <Trash2 className="mr-1 h-3 w-3" /> Delete
-            </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => bringToFront(selectedArr)}>
-              <ArrowUpToLine className="mr-1 h-3 w-3" /> Front
-            </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => sendToBack(selectedArr)}>
-              <ArrowDownToLine className="mr-1 h-3 w-3" /> Back
-            </Button>
+        <div className="space-y-1.5">
+          <Label className="text-[11px] font-medium text-muted-foreground">Layers</Label>
+          <div className="flex gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => sendToBack(selectedArr)}>
+                  <ArrowDownToLine className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">Send to back</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => sendToBack(selectedArr)}>
+                  <ArrowDown className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">Send backward</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => bringToFront(selectedArr)}>
+                  <ArrowUp className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">Bring forward</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => bringToFront(selectedArr)}>
+                  <ArrowUpToLine className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">Bring to front</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       )}
